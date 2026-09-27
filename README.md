@@ -160,6 +160,16 @@ pytest                              # offline unit tests (fast, no network)
 so every assertion about bucketing, means, counts, and novelty runs against
 fixed RFC 2822 publish times — no live feed required.
 
+## Integration
+
+These signal vectors are consumed by the RL pipeline repo
+`kraken-trading-bot` (a sibling checkout, e.g. at `~/Projects/kraken-trading-bot`)
+via the seam documented in [`INTEGRATION.md`](./INTEGRATION.md): the output
+schema, how the hourly timestamps align to OHLCV bar timestamps, the current
+adapter stub (`extra_features_file` config flag + `merge_extra_features` in
+`kraken_trading_bot/rl/data.py`), and the full wiring plan into
+`train`/`backtest`.
+
 ## License
 
 MIT
