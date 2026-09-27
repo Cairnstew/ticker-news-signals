@@ -9,12 +9,12 @@
 # in nixpkgs; everything else comes from the python package set.
 
 { lib
-, python3
+, python
 , gnews
 , vaderSentiment
 }:
 
-python3.pkgs.buildPythonApplication {
+python.pkgs.buildPythonApplication {
   pname = "ticker-news-signals";
   version = "0.1.0";
   format = "pyproject";
@@ -35,7 +35,7 @@ python3.pkgs.buildPythonApplication {
     src = ./..;
   };
 
-  nativeBuildInputs = with python3.pkgs; [
+  nativeBuildInputs = with python.pkgs; [
     setuptools
     wheel
   ];
