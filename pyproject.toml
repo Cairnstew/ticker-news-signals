@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ticker-news-signals"
+version = "0.1.0"
+description = "Pull crypto news headlines via GNews, score sentiment with VADER, and emit per-ticker per-hour signal vectors as JSONL."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "gnews>=0.8",
+    "vaderSentiment>=3.3",
+]
+
+[project.scripts]
+ticker-news-signals = "ticker_news_signals.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+]
+
+[tool.setuptools.packages.find]
+include = ["ticker_news_signals*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: hits the live GNews RSS feed (requires network)",
+]
