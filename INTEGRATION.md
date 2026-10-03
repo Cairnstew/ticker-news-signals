@@ -108,14 +108,26 @@ would implement the TODO inside `merge_extra_features`:
 `cli.py pull` is a one-shot command — there is no daemon. Common patterns:
 
 ```bash
-# Manual
+# Manual — REPLACES the output file with this pull's window
 python cli.py pull --ticker ETH/USD --output signals/eth_usd.jsonl
 
-# Hourly cron (appends: the file is JSONL, so subsequent pulls may be
-# concatenated; the consumer dedupes by join key)
+# Hourly (append: one record per hour, the file is a growing log)
 0 * * * * cd ~/Projects/ticker-news-signals && \
-  python cli.py pull --ticker ETH/USD --output signals/eth_usd.jsonl >> signals/eth_usd.jsonl
+  python cli.py pull --ticker ETH/USD --output signals/eth_usd.jsonl --append
 ```
+
+**`--append` is not optional for a timer.** Without it each pull *replaces*
+the file, and the default `--lookback-hours 1` means an hourly replace-mode
+pull leaves the file exactly one hour deep, forever — a silent history
+rewrite that looks like it worked. Replacing a file that already holds
+records prints a stderr warning naming how many records were dropped, so the
+mistake is visible at the moment it happens rather than weeks later.
+
+Do **not** reach for shell `>>` on the same file the CLI writes: the CLI
+truncates on open, and appending after a truncate is fine — but a *partial*
+crash between them, or any `>>` used together with a `>` elsewhere, yields a
+file whose last line is cut short. `write_jsonl(append=True)` writes the
+newline separator itself for exactly that case.
 
 Because records are keyed by `(ticker, timestamp)`, re-pulling a given
 hour is idempotent for the consumer even if the same hour is written twice;

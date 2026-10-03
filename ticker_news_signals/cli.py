@@ -8,12 +8,19 @@ behave identically.
 Usage (from the dev shell):
 
     python cli.py pull ETH/USD --output signals.jsonl
+    python cli.py pull ETH/USD --output signals.jsonl --append
     python cli.py pull ETH/USD --lookback-hours 3 --json
     python cli.py version
 
 ``pull`` fetches news for --ticker from GNews (keyless), scores sentiment
 with VADER, and writes one JSON signal vector per line (NDJSON) to --output
 or stdout.  ``--json`` switches to a pretty self-describing envelope.
+
+``--output`` is REPLACED by each pull unless ``--append`` is given, in which
+case the pull's records are added to whatever the file already holds.  A
+timer wants ``--append``: the default lookback is one hour, so a replace-mode
+timer leaves the file one hour deep forever.  Replacing a file that already
+holds records prints a warning on stderr.
 """
 
 from __future__ import annotations
@@ -52,6 +59,16 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--ticker", required=True, help="market or symbol, e.g. ETH/USD")
     p.add_argument("--output", default=None, help="output file path (default: stdout)")
     p.add_argument("--lookback-hours", type=int, default=1, help="hours to look back (default: 1)")
+    p.add_argument(
+        "--append",
+        action="store_true",
+        help=(
+            "append to --output instead of replacing it. Default is OFF, so "
+            "an existing caller keeps today's replace behaviour; a timer that "
+            "wants a growing log MUST pass it, because an hourly pull with "
+            "--lookback-hours 1 leaves the file one hour deep otherwise."
+        ),
+    )
     p.add_argument("--json", action="store_true", help="pretty JSON output (envelope) instead of JSONL")
     p.set_defaults(func=cmd_pull)
 
@@ -81,7 +98,11 @@ def cmd_pull(args: argparse.Namespace) -> None:
     signals = env["resources"]["signals"]["signals"]
 
     if args.output:
-        path = write_json(env, args.output) if args.json else write_jsonl(args.output, signals)
+        path = (
+            write_json(env, args.output)
+            if args.json
+            else write_jsonl(args.output, signals, append=args.append)
+        )
         print(f"signals -> {path}")
         return
     if args.json:
