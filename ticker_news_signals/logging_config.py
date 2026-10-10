@@ -16,6 +16,7 @@ Loggers
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import logging.handlers
@@ -24,9 +25,9 @@ import re
 import stat
 import sys
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 # ---------------------------------------------------------------------------
 # Sensitive-data patterns
@@ -49,9 +50,17 @@ _SENSITIVE_PATTERNS: list[re.Pattern[str]] = [
 # ---------------------------------------------------------------------------
 
 # Fields on LogRecord that are set by logging internals — never extra data.
-_LOG_RECORD_BUILTINS = frozenset(logging.LogRecord(
-    "", 0, "", 0, "", (), None,
-).__dict__.keys())
+_LOG_RECORD_BUILTINS = frozenset(
+    logging.LogRecord(
+        "",
+        0,
+        "",
+        0,
+        "",
+        (),
+        None,
+    ).__dict__.keys()
+)
 
 
 class RedactionFilter(logging.Filter):
@@ -65,7 +74,7 @@ class RedactionFilter(logging.Filter):
 
     _PASSWORD_PLACEHOLDER = "[REDACTED]"
 
-    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
+    def filter(self, record: logging.LogRecord) -> bool:
         # Scrub the main message.
         record.msg = self._redact(record.getMessage())
         record.args = None  # prevent double-formatting
@@ -75,9 +84,7 @@ class RedactionFilter(logging.Filter):
         # filters run *before* the formatter.)
         if record.exc_info and record.exc_info[0] is not None:
             if record.exc_text is None:
-                record.exc_text = "".join(
-                    traceback.format_exception(*record.exc_info)
-                )
+                record.exc_text = "".join(traceback.format_exception(*record.exc_info))
             record.exc_text = self._redact(record.exc_text)
 
         if record.stack_info is not None:
@@ -124,19 +131,37 @@ class StructuredJsonFormatter(logging.Formatter):
     strings.
     """
 
-    _RESERVED = {
-        "name", "msg", "args", "created", "relativeCreated", "exc_info",
-        "exc_text", "stack_info", "levelname", "levelno", "pathname",
-        "filename", "module", "funcName", "lineno", "msecs", "message",
-        "thread", "threadName", "process", "processName",
+    _RESERVED: ClassVar[set[str]] = {
+        "name",
+        "msg",
+        "args",
+        "created",
+        "relativeCreated",
+        "exc_info",
+        "exc_text",
+        "stack_info",
+        "levelname",
+        "levelno",
+        "pathname",
+        "filename",
+        "module",
+        "funcName",
+        "lineno",
+        "msecs",
+        "message",
+        "thread",
+        "threadName",
+        "process",
+        "processName",
         "asctime",
     }
 
     def format(self, record: logging.LogRecord) -> str:
         doc: dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(
-                record.created, tz=timezone.utc
-            ).strftime("%Y-%m-%dT%H:%M:%S.") + f"{record.msecs:03.0f}Z",
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).strftime(
+                "%Y-%m-%dT%H:%M:%S."
+            )
+            + f"{record.msecs:03.0f}Z",
             "level": record.levelname,
             "logger": record.name,
             "event": record.getMessage(),
@@ -194,7 +219,7 @@ class HumanReadableFormatter(logging.Formatter):
     _LEVEL_WIDTH = 8
 
     def format(self, record: logging.LogRecord) -> str:
-        ts = datetime.fromtimestamp(record.created, tz=timezone.utc).strftime("%H:%M:%S")
+        ts = datetime.fromtimestamp(record.created, tz=UTC).strftime("%H:%M:%S")
         name = record.name.replace("ticker_news_signals.", "tns.")
         if name == "ticker_news_signals":
             name = "tns"
@@ -242,13 +267,11 @@ def log_event(
         These are serialised by :class:`StructuredJsonFormatter` and
         ignored by the human-readable formatter.
     """
-    if isinstance(level, str):
-        level = getattr(logging, level.upper(), logging.INFO)
-    if isinstance(logger, str):
-        logger_obj = _get_logger(logger)
-    else:
-        logger_obj = logger
-    logger_obj.log(level, event, extra=fields)
+    resolved_level = (
+        getattr(logging, level.upper(), logging.INFO) if isinstance(level, str) else level
+    )
+    logger_obj = _get_logger(logger) if isinstance(logger, str) else logger
+    logger_obj.log(resolved_level, event, extra=fields)
 
 
 # ---------------------------------------------------------------------------
@@ -258,29 +281,25 @@ def log_event(
 
 def _xdg_state_dir() -> Path:
     """Return ``$XDG_STATE_HOME/ticker-news-signals/logs``."""
-    base = os.environ.get("XDG_STATE_HOME", "")
-    if not base:
-        base = os.path.join(os.path.expanduser("~"), ".local", "state")
-    return Path(base) / "ticker-news-signals" / "logs"
+    base = os.environ.get("XDG_STATE_HOME", "").strip()
+    root = Path(base) if base else Path.home() / ".local" / "state"
+    return root / "ticker-news-signals" / "logs"
 
 
 def _ensure_log_dir(path: Path) -> None:
     """Create the parent directory with restricted permissions."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        os.chmod(path.parent, stat.S_IRWXU)
-    except OSError:
-        pass  # best-effort on platforms that don't support chmod
+    # Best-effort on platforms that don't support chmod.
+    with contextlib.suppress(OSError):
+        path.parent.chmod(stat.S_IRWXU)
 
 
 def _create_restricted_file(path: Path) -> None:
     """Create the log file with 0600 permissions if it doesn't exist."""
     if not path.exists():
         path.touch()
-    try:
-        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
-    except OSError:
-        pass
+    with contextlib.suppress(OSError):
+        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
 # ---------------------------------------------------------------------------

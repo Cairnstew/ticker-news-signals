@@ -12,11 +12,13 @@
 , python
 , gnews
 , vaderSentiment
+, httpx
+, feedparser
 }:
 
 python.pkgs.buildPythonApplication {
   pname = "ticker-news-signals";
-  version = "0.1.0";
+  version = "0.2.0";
   format = "pyproject";
 
   # Clean source: exclude git, cache, venv, and nix from the Nix store.
@@ -43,6 +45,8 @@ python.pkgs.buildPythonApplication {
   propagatedBuildInputs = [
     gnews
     vaderSentiment
+    httpx
+    feedparser
   ];
 
   # Network fetch of the live GNews feed is not possible in the sandbox.

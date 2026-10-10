@@ -4,13 +4,28 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ticker-news-signals"
-version = "0.1.0"
-description = "Pull crypto news headlines via GNews, score sentiment with VADER, and emit per-ticker per-hour signal vectors as JSONL."
+version = "0.2.0"
+description = "A standalone, multi-source crypto news-sentiment signal pipeline: keyless headlines, local scoring, per-ticker per-hour signal vectors as JSONL."
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.11"
+authors = [{ name = "Cairnstew" }]
+keywords = ["crypto", "news", "sentiment", "signals", "trading", "vader"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
 dependencies = [
     "gnews>=0.8",
     "vaderSentiment>=3.3",
+    "httpx>=0.27",
+    "feedparser>=6.0",
 ]
 
 [project.scripts]
@@ -19,6 +34,22 @@ ticker-news-signals = "ticker_news_signals.cli:main"
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
+    "respx>=0.21",
+    "ruff>=0.6",
+    "pyright>=1.1.390",
+    # Notebook support (`tools/build_notebook.py` / `tools/validate_notebook.py`).
+    "nbformat>=5",
+    "nbclient>=0.10",
+    "ipykernel>=6.29",
+]
+
+# Optional transformer backends (e.g. `cryptobert`). NOT installed by default:
+# torch + a ~500 MB model download is a different footprint than this package's
+# pure-Python core. Backends are dependency-gated and simply absent until this
+# extra is present.
+ml = [
+    "transformers>=4.40",
+    "torch>=2.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -27,5 +58,33 @@ include = ["ticker_news_signals*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
+    "live: hits live public news feeds (requires network; deselect with '-m \"not live\"')",
     "integration: hits the live GNews RSS feed (requires network)",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["ticker_news_signals", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "C4", "PTH"]
+ignore = [
+    # Non-ASCII in docstrings (en-dashes, arrows, ×) is deliberate prose.
+    "RUF001", "RUF002", "RUF003",
+    # `assert` is used for type-narrowing invariants the orchestrator guarantees.
+    "S101",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+# Notebook generator: long lines are inside triple-quoted cell sources where
+# wrapping would clobber the generated code; the formatter already passes.
+"tools/*" = ["E501"]
+
+[tool.pyright]
+include = ["ticker_news_signals"]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+reportMissingTypeStubs = false
+reportPrivateUsage = false

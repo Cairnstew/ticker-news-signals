@@ -142,7 +142,7 @@ class NewsClient:
             except Exception as exc:  # connection-level errors
                 last_exc = exc
                 if attempt < self.retry_attempts - 1:
-                    delay = self.retry_backoff * (2 ** attempt)
+                    delay = self.retry_backoff * (2**attempt)
                     log_event(
                         "ticker_news_signals.client",
                         "gnews request failed; retrying",

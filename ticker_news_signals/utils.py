@@ -7,7 +7,7 @@ user-visible ``ETH/USD`` becomes the signal-vector key ``ETH_USD``.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 
 # A single UTC hour in seconds (used by the lookback helpers).
@@ -16,14 +16,14 @@ HOUR_SECONDS = 3600
 
 def now_utc() -> datetime:
     """Current time as a timezone-aware UTC :class:`datetime`."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def ensure_utc(dt: datetime) -> datetime:
     """Return *dt* as an aware UTC datetime (naive input is assumed UTC)."""
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def floor_to_hour(dt: datetime) -> datetime:
@@ -67,10 +67,10 @@ def parse_article_date(text: str | None) -> datetime | None:
 def normalize_ticker(ticker: str) -> str:
     """Normalise a market spelling to the signal-vector key.
 
-    ``ETH/USD`` -> ``ETH_USD``; ``eth-usd`` -> ``ETH_USD``.  Anything other
-    than ``/`` and ``-`` separators is left as-is (uppercased).
+    ``ETH/USD`` -> ``ETH_USD``; ``eth-usd`` -> ``ETH_USD``; ``ETH:USD`` ->
+    ``ETH_USD``.  Anything else is left as-is (uppercased).
     """
-    return ticker.strip().upper().replace("/", "_").replace("-", "_")
+    return ticker.strip().upper().replace("/", "_").replace("-", "_").replace(":", "_")
 
 
 def base_symbol(ticker: str) -> str:

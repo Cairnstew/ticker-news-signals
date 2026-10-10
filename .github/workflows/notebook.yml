@@ -1,0 +1,27 @@
+name: Notebook smoke test
+
+# Executes notebooks/pipeline.ipynb against the LIVE public feeds.
+# This hits real upstream APIs, so it is manual/scheduled only — never part of
+# the default PR checks (offline testing lives in ci.yml).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"  # Mondays 04:17 UTC
+
+jobs:
+  notebook:
+    name: validate notebooks/pipeline.ipynb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: install (editable, dev extras)
+        run: pip install -e ".[dev]"
+      - name: register project kernel (same spec Zed uses)
+        run: python tools/install_kernel.py
+      - name: execute notebook
+        # Runs under the pinned `ticker-news-signals` kernel, not the generic python3.
+        run: python tools/validate_notebook.py notebooks/pipeline.ipynb --kernel ticker-news-signals --timeout 180

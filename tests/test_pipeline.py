@@ -7,14 +7,14 @@ times so bucketing, means, counts, and novelty are fully deterministic.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
-from ticker_news_signals.client import NewsClient
 from ticker_news_signals import pipeline
+from ticker_news_signals.client import NewsClient
 from ticker_news_signals.sentiment import score_headline
 
-NOW = datetime(2026, 9, 27, 14, 30, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 27, 14, 30, tzinfo=UTC)
 
 _ENTRY_A = {
     "title": "This is amazing news for Ethereum",
@@ -91,7 +91,9 @@ class TestFetchSignals:
         assert signals == []
 
     def test_undated_article_is_counted_at_now(self) -> None:
-        client = _client_with(topic=[{"title": "Fresh but undated", "url": "https://example.com/x"}])
+        client = _client_with(
+            topic=[{"title": "Fresh but undated", "url": "https://example.com/x"}]
+        )
         signals = pipeline.fetch_signals("ETH/USD", lookback_hours=1, client=client, now=NOW)
         assert len(signals) == 1
         assert signals[0].timestamp == "2026-09-27T14:00:00Z"

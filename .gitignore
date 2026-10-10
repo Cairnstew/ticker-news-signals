@@ -17,9 +17,17 @@ dist/
 .pytest_cache/
 .coverage
 htmlcov/
+.ruff_cache/
 
 # Nix
 result
+result-*
+
+# Local cache file written by `cache`/`pull` when TNS_CACHE_PATH is unset.
+ticker_news_signals_cache.sqlite3
+
+# Project-local Jupyter data dir, if tools/install_kernel.py is pointed at it.
+.jupyter-data/
 
 # Editor / OS
 .idea/

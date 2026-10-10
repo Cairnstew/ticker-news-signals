@@ -6,6 +6,14 @@ repo, the producer) and the RL pipeline repo
 how the two time models line up, how the consumer currently reads us, and
 what a full wiring pass looks like.
 
+> **v0.2 note — the canonical schema below is unchanged.** The pipeline is now
+> multi-source (GNews + keyless RSS, optional CryptoPanic), de-duplicates
+> across feeds, and adds a per-pull `data_quality` block (provenance, errors,
+> throttles, skipped sources, missing fields). None of that changes the
+> five-field records this consumer left-joins; richer optional fields are
+> available via `--extended` / `--metrics` and are safe for
+> `merge_extra_features` to ignore until you want them.
+
 ## Output schema
 
 `cli.py pull` writes JSONL — one record per **per-(ticker, UTC hour)**
@@ -28,7 +36,14 @@ signal vector. Every record round-trips through `json.dumps` (see
 | `timestamp`       | string  | Start of the UTC hour bucket, ISO 8601 (`YYYY-MM-DDTHH:MM:SSZ`). One per line.   |
 | `sentiment_score` | float   | Mean VADER compound score (−1.0 … +1.0) across that hour's headlines (0.0 when none). |
 | `article_count`   | int     | Number of headlines bucketed into that hour.                                   |
-| `novelty_flag`    | bool    | True if the hour contains an article newer than ~15 minutes (recency signal).   |
+| `novelty_flag`    | bool    | True if the hour contains an article newer than ~15 minutes (recency signal). |
+
+Optional derived fields available with `--extended` (extra columns the
+consumer's left-join tolerates): `source_count` (distinct sources covering the
+hour), `sentiment_std` (dispersion across the hour's headlines),
+`scorer_std` (extra columns: how far the ensemble's constituent scorers
+disagreed on the hour's headlines; `0.0` for single-backend runs),
+`sources` (source names), `top_headlines` (most polarising headlines).
 
 Timestamps are produced by `floor_to_hour()` in
 `ticker_news_signals/utils.py`: every article time is snapped to the start
@@ -132,3 +147,25 @@ newline separator itself for exactly that case.
 Because records are keyed by `(ticker, timestamp)`, re-pulling a given
 hour is idempotent for the consumer even if the same hour is written twice;
 the left-join simply keeps the last value.
+
+## Database-shaped alternative (`QueryCache`)
+
+If the consumer prefers a queryable store over parsing JSONL, the producer
+ships `ticker_news_signals.store.QueryCache` (mirroring tickerkit's store):
+a git-trackable SQLite file that saves whole `SignalResult`/`HistoryResult`
+objects under ticker keyed entries and loads them back as typed models.
+Canonical vectors live under the same keys as the JSONL records — a consumer
+can `qc.load_signal("ETH")` instead of reading `signals/eth_usd.jsonl`.
+
+```python
+from ticker_news_signals import QueryCache
+
+with QueryCache("vendor_signals.sqlite3") as qc:          # producer commits this file
+    result = qc.load_signal("ETH")                        # SignalResult | None
+    for vector in result.vectors:
+        row = vector.to_dict()   # the exact five-field record above
+```
+
+`QueryCache` honours the same TTL semantics as the provider cache (default
+never-expire), and calling `qc.save_signal(ticker, result)` from a timer is
+the append-log equivalent without any file-truncation hazard.

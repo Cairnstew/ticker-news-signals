@@ -1,37 +1,43 @@
 """Data extraction infra: pull signal vectors as clean JSON.
 
 Mirrors the ``kraken_api.export`` registry pattern: one registry mapping a
-resource name to a fetch function that returns a JSON-serialisable dict,
-plus :func:`extract` / :func:`extract_envelope` entry points and the
+resource name to a fetch function that returns a JSON-serialisable dict, plus
+:func:`extract` / :func:`extract_envelope` entry points and the
 :func:`write_json` / :func:`write_jsonl` persistence helpers.
 
 Everything returned here round-trips through ``json.dumps``: no datetimes,
 no Decimals, no surprise keys.
 
-    from ticker_news_signals.client import NewsClient
+Two resources are available:
+
+``signals``
+    The canonical five-field vectors (the consumer contract in
+    ``INTEGRATION.md``), keyed by ``ticker`` and ``lookback_hours``.
+``result``
+    The full :class:`~ticker_news_signals.models.SignalResult` — extended
+    vectors plus the ``data_quality`` block (provenance, errors, throttles,
+    skips, missing fields, coverage).
+
     from ticker_news_signals.export import extract_envelope, write_jsonl
 
-    client = NewsClient()
-    doc = extract(client, "signals", ticker="ETH/USD", lookback_hours=1)
-    env = extract_envelope(client, "signals", ticker="ETH/USD")
+    env = extract_envelope(None, "signals", ticker="ETH/USD", lookback_hours=1)
     write_jsonl("signals.jsonl", env["resources"]["signals"]["signals"])
     # ...or into a growing history log (what the hourly timer does):
-    write_jsonl(
-        "signals.jsonl", env["resources"]["signals"]["signals"], append=True
-    )
+    write_jsonl("signals.jsonl", env["resources"]["signals"]["signals"], append=True)
 """
 
 from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .utils import normalize_ticker
 
-SCHEMA_VERSION = "ticker-news-signals/1"
+SCHEMA_VERSION = "ticker-news-signals/2"
 
 # An extractor: (source, **opts) -> JSON-ready dict.
 Extractor = Callable[..., dict[str, Any]]
@@ -42,15 +48,32 @@ Extractor = Callable[..., dict[str, Any]]
 # ---------------------------------------------------------------------- #
 
 
-def _signals(client: Any, ticker: str = "", lookback_hours: int = 1, **opts: Any) -> dict[str, Any]:
-    from .pipeline import fetch_signals
+def _fetch(source: Any, ticker: str, lookback_hours: int, opts: dict[str, Any]) -> Any:
+    from .pipeline import fetch_result
 
-    vectors = fetch_signals(ticker, lookback_hours=lookback_hours, client=client)
+    return fetch_result(
+        ticker,
+        lookback_hours=lookback_hours,
+        client=source,
+        config=opts.get("config"),
+        providers=opts.get("providers"),
+        max_results=opts.get("max_results"),
+        now=opts.get("now"),
+    )
+
+
+def _signals(source: Any, ticker: str = "", lookback_hours: int = 1, **opts: Any) -> dict[str, Any]:
+    result = _fetch(source, ticker, int(lookback_hours), opts)
     return {
         "ticker": normalize_ticker(ticker),
         "lookback_hours": int(lookback_hours),
-        "signals": [v.to_dict() for v in vectors],
+        "signals": [v.to_dict() for v in result.vectors],
     }
+
+
+def _result(source: Any, ticker: str = "", lookback_hours: int = 1, **opts: Any) -> dict[str, Any]:
+    result = _fetch(source, ticker, int(lookback_hours), opts)
+    return result.to_dict()
 
 
 # ---------------------------------------------------------------------- #
@@ -59,7 +82,8 @@ def _signals(client: Any, ticker: str = "", lookback_hours: int = 1, **opts: Any
 
 # name -> (extractor, one-line help).
 EXTRACTORS: dict[str, tuple[Extractor, str]] = {
-    "signals": (_signals, "per-ticker per-hour sentiment vectors (ticker=, lookback_hours=)"),
+    "signals": (_signals, "canonical per-ticker per-hour vectors (ticker=, lookback_hours=)"),
+    "result": (_result, "full result: extended vectors + data_quality (ticker=, lookback_hours=)"),
 }
 
 
@@ -94,7 +118,7 @@ def extract_envelope(source: Any, resource: str, **opts: Any) -> dict[str, Any]:
 def _envelope(data: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema": SCHEMA_VERSION,
-        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "exported_at": datetime.now(UTC).isoformat(),
         "resources": data,
     }
 
@@ -204,11 +228,11 @@ def write_jsonl(
 
 
 __all__ = [
-    "SCHEMA_VERSION",
     "EXTRACTORS",
+    "SCHEMA_VERSION",
+    "dumps",
     "extract",
     "extract_envelope",
-    "dumps",
     "write_json",
     "write_jsonl",
 ]

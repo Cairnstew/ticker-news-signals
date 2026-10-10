@@ -106,8 +106,9 @@ def test_replace_is_loud_on_stderr(tmp_path: Path, capsys) -> None:
         "the warning must name the number of records dropped, so the "
         f"operator can tell a 2-record loss from a 2-record no-op: {captured.err!r}"
     )
-    assert _lines(out) == [json.dumps(_record(3), sort_keys=True, ensure_ascii=False,
-                                      separators=(",", ":"))]
+    assert _lines(out) == [
+        json.dumps(_record(3), sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    ]
 
 
 def test_replace_of_an_empty_or_missing_file_is_silent(tmp_path: Path, capsys) -> None:
@@ -154,9 +155,7 @@ def test_cli_accepts_append_and_defaults_off() -> None:
     """
     from ticker_news_signals.cli import _build_parser
 
-    args = _build_parser().parse_args(
-        ["pull", "--ticker", "ETH/USD", "--output", "x.jsonl"]
-    )
+    args = _build_parser().parse_args(["pull", "--ticker", "ETH/USD", "--output", "x.jsonl"])
     assert args.append is False, "back-compat: replace stays the default"
 
     args = _build_parser().parse_args(

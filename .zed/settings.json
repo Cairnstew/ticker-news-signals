@@ -1,0 +1,23 @@
+{
+  // Jupyter settings. Verified against zed-industries/zed assets/settings/default.json:
+  //   "jupyter": { "enabled": bool, "kernel_selections": { <language>: <kernel> } }
+  // Zed discovers kernels via `jupyter kernelspec list` and picks one for Python cells.
+  // The `ticker-news-signals` kernelspec is written by tools/install_kernel.py, which
+  // pins argv to the project interpreter by absolute path (`.venv/bin/python`, or the
+  // `nix develop` python). Re-run it whenever the virtualenv is recreated.
+  "jupyter": {
+    "enabled": true,
+    "kernel_selections": {
+      "python": "ticker-news-signals"
+    }
+  },
+
+  // Per-language settings live under `languages`. Do NOT put them in `file_types`:
+  // that maps a language to an array of glob patterns, which is what produces
+  // "invalid type: map, expected a set".
+  "languages": {
+    "Python": {
+      "tab_size": 4
+    }
+  }
+}
